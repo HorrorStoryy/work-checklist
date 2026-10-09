@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Рабочий Чек-лист
 // @namespace    https://smartway.today/
-// @version      1.2
+// @version      1.3
 // @description  Чек-листы для рабочих задач с прогрессом и импортом/экспортом
 // @author       Smartway
 // @match        *://*/*
@@ -18,7 +18,7 @@
     console.log('[WC] === Скрипт Рабочий Чек-лист загружен ===');
     console.log('[WC] URL:', window.location.href);
 
-    // === ИКОНКИ (Unicode-escape, GitHub не ломает) ===
+    // === ИКОНКИ ===
     var ICON_CHECKLIST = '\uD83D\uDCCB';
     var ICON_CLOSE = '\u2715';
     var ICON_PLUS = '\u2795';
@@ -309,7 +309,7 @@
     var appData = { sections: [] };
     var currentModalAction = null;
 
-    // === СОХРАНЕНИЕ/ЗАГРУЗКА С FALLBACK ===
+    // === СОХРАНЕНИЕ/ЗАГРУЗКА ===
     function loadData() {
         console.log('[WC] Загрузка данных...');
         try {
@@ -324,10 +324,14 @@
             }
             if (saved) {
                 appData = JSON.parse(saved);
-                console.log('[WC] Загружено разделов:', appData.sections ? appData.sections.length : 0);
+                // Защита: гарантируем что sections это массив
+                if (!appData.sections || !Array.isArray(appData.sections)) {
+                    appData = { sections: [] };
+                }
+                console.log('[WC] Загружено разделов:', appData.sections.length);
             } else {
                 appData = { sections: [] };
-                console.log('[WC] Нет сохранённых данных, создаём пустые');
+                console.log('[WC] Нет сохранённых данных');
             }
         } catch (e) {
             console.error('[WC] Ошибка загрузки:', e);
@@ -426,6 +430,34 @@
         return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
     }
 
+    // === ПОИСК С ЗАЩИТОЙ ===
+    function findSection(sid) {
+        if (!appData.sections || !Array.isArray(appData.sections) || !sid) return null;
+        var i;
+        for (i = 0; i < appData.sections.length; i++) {
+            if (appData.sections[i].id === sid) return appData.sections[i];
+        }
+        return null;
+    }
+
+    function findItem(section, iid) {
+        if (!section || !section.items || !Array.isArray(section.items) || !iid) return null;
+        var i;
+        for (i = 0; i < section.items.length; i++) {
+            if (section.items[i].id === iid) return section.items[i];
+        }
+        return null;
+    }
+
+    function findSubtask(item, subid) {
+        if (!item || !item.subtasks || !Array.isArray(item.subtasks) || !subid) return null;
+        var i;
+        for (i = 0; i < item.subtasks.length; i++) {
+            if (item.subtasks[i].id === subid) return item.subtasks[i];
+        }
+        return null;
+    }
+
     // === РЕНДЕР ===
     function render() {
         console.log('[WC] Рендер...');
@@ -445,24 +477,39 @@
         var s;
         for (s = 0; s < appData.sections.length; s++) {
             var section = appData.sections[s];
+            
+            // Защита: проверяем что section валидный
+            if (!section || !section.id) {
+                console.warn('[WC] Пропускаю невалидный раздел:', section);
+                continue;
+            }
+
+            // Гарантируем что items это массив
+            if (!section.items || !Array.isArray(section.items)) {
+                section.items = [];
+            }
+
             var sectionEl = document.createElement('div');
             sectionEl.className = 'section-card';
 
             var totalItems = 0;
             var completedItems = 0;
 
-            if (section.items && section.items.length > 0) {
-                var i;
-                for (i = 0; i < section.items.length; i++) {
-                    var item = section.items[i];
-                    totalItems++;
-                    if (item.completed) completedItems++;
-                    if (item.subtasks && item.subtasks.length > 0) {
-                        var j;
-                        for (j = 0; j < item.subtasks.length; j++) {
-                            totalItems++;
-                            if (item.subtasks[j].completed) completedItems++;
-                        }
+            var i;
+            for (i = 0; i < section.items.length; i++) {
+                var item = section.items[i];
+                if (!item) continue; // Защита от undefined
+                
+                totalItems++;
+                if (item.completed) completedItems++;
+                
+                if (item.subtasks && Array.isArray(item.subtasks)) {
+                    var j;
+                    for (j = 0; j < item.subtasks.length; j++) {
+                        var sub = item.subtasks[j];
+                        if (!sub) continue;
+                        totalItems++;
+                        if (sub.completed) completedItems++;
                     }
                 }
             }
@@ -472,7 +519,7 @@
             var headerHtml = [
                 '<div class="section-header" data-section-id="' + section.id + '">',
                 '  <div class="section-info">',
-                '    <h4 class="section-title">' + escapeHtml(section.title) + '</h4>',
+                '    <h4 class="section-title">' + escapeHtml(section.title || 'Без названия') + '</h4>',
                 '    <div class="progress-container">',
                 '      <div class="progress-bar"><div class="progress-fill" style="width: ' + percent + '%"></div></div>',
                 '      <span class="progress-text">' + completedItems + '/' + totalItems + '</span>',
@@ -505,31 +552,40 @@
 
             var itemsList = sectionEl.querySelector('#items-' + section.id);
 
-            if (section.items && section.items.length > 0) {
+            if (section.items.length > 0) {
                 var k;
                 for (k = 0; k < section.items.length; k++) {
                     var item = section.items[k];
+                    
+                    // Защита: пропускаем undefined
+                    if (!item || !item.id) {
+                        console.warn('[WC] Пропускаю невалидный item:', item);
+                        continue;
+                    }
+
                     var itemEl = document.createElement('li');
                     itemEl.className = 'checklist-group';
 
                     var itemHtml = [
                         '<div class="checklist-item">',
                         '  <input type="checkbox" class="item-check" data-sid="' + section.id + '" data-iid="' + item.id + '" ' + (item.completed ? 'checked' : '') + '>',
-                        '  <strong class="item-text ' + (item.completed ? 'completed' : '') + '">' + escapeHtml(item.text) + '</strong>',
+                        '  <strong class="item-text ' + (item.completed ? 'completed' : '') + '">' + escapeHtml(item.text || '') + '</strong>',
                         '  <button class="icon-btn primary" data-action="add-subtask" data-sid="' + section.id + '" data-iid="' + item.id + '" title="Добавить пункт">' + ICON_SVG_SMALL_PLUS + '</button>',
                         '  <button class="icon-btn danger" data-action="delete-item" data-sid="' + section.id + '" data-iid="' + item.id + '" title="Удалить">' + ICON_SVG_SMALL_DELETE + '</button>',
                         '</div>'
                     ].join('');
 
-                    if (item.subtasks && item.subtasks.length > 0) {
+                    if (item.subtasks && Array.isArray(item.subtasks) && item.subtasks.length > 0) {
                         itemHtml += '<ul style="list-style: none; padding-left: 26px; margin-top: 4px;">';
                         var m;
                         for (m = 0; m < item.subtasks.length; m++) {
                             var sub = item.subtasks[m];
+                            if (!sub || !sub.id) continue;
+                            
                             itemHtml += [
                                 '<li class="checklist-item">',
                                 '  <input type="checkbox" class="sub-check" data-sid="' + section.id + '" data-iid="' + item.id + '" data-subid="' + sub.id + '" ' + (sub.completed ? 'checked' : '') + '>',
-                                '  <span class="item-text ' + (sub.completed ? 'completed' : '') + '" style="font-size: 13px;">' + escapeHtml(sub.text) + '</span>',
+                                '  <span class="item-text ' + (sub.completed ? 'completed' : '') + '" style="font-size: 13px;">' + escapeHtml(sub.text || '') + '</span>',
                                 '  <button class="icon-btn danger" data-action="delete-sub" data-sid="' + section.id + '" data-iid="' + item.id + '" data-subid="' + sub.id + '">' + ICON_SVG_SMALL_DELETE + '</button>',
                                 '</li>'
                             ].join('');
@@ -546,36 +602,6 @@
         }
 
         attachEventListeners();
-    }
-
-    // === ПОИСК РАЗДЕЛА (с защитой) ===
-    function findSection(sid) {
-        if (!appData.sections || !sid) return null;
-        var i;
-        for (i = 0; i < appData.sections.length; i++) {
-            if (appData.sections[i].id === sid) return appData.sections[i];
-        }
-        return null;
-    }
-
-    // === ПОИСК ГРУППЫ (с защитой) ===
-    function findItem(section, iid) {
-        if (!section || !section.items || !iid) return null;
-        var i;
-        for (i = 0; i < section.items.length; i++) {
-            if (section.items[i].id === iid) return section.items[i];
-        }
-        return null;
-    }
-
-    // === ПОИСК ПОДГРУППЫ (с защитой) ===
-    function findSubtask(item, subid) {
-        if (!item || !item.subtasks || !subid) return null;
-        var i;
-        for (i = 0; i < item.subtasks.length; i++) {
-            if (item.subtasks[i].id === subid) return item.subtasks[i];
-        }
-        return null;
     }
 
     // === ОБРАБОТЧИКИ СОБЫТИЙ ===
@@ -766,7 +792,7 @@
         closeModal();
     }
 
-    // === ДЕЙСТВИЯ С ПУНКТАМИ ===
+    // === ДЕЙСТВИЯ ===
     function toggleItem(sid, iid) {
         var section = findSection(sid);
         if (section) {
@@ -882,7 +908,6 @@
         console.log('[WC] Инициализация...');
         ensureToggleButton();
 
-        // MutationObserver для восстановления кнопки если сайт её удалит
         var observer = new MutationObserver(function() {
             if (!document.getElementById('work-checklist-toggle')) {
                 console.log('[WC] Кнопка удалена сайтом, воссоздаю...');
