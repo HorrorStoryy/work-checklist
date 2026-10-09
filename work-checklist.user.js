@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Рабочий Чек-лист
 // @namespace    https://smartway.today/
-// @version      1.3
+// @version      1.5
 // @description  Чек-листы для рабочих задач с прогрессом и импортом/экспортом
 // @author       Smartway
 // @match        *://*/*
@@ -18,19 +18,17 @@
     console.log('[WC] === Скрипт Рабочий Чек-лист загружен ===');
     console.log('[WC] URL:', window.location.href);
 
-    // === ИКОНКИ ===
+    // === ИКОНКИ (Unicode-escape) ===
     var ICON_CHECKLIST = '\uD83D\uDCCB';
     var ICON_CLOSE = '\u2715';
     var ICON_PLUS = '\u2795';
     var ICON_IMPORT = '\uD83D\uDCE5';
     var ICON_EXPORT = '\uD83D\uDCE4';
-    var ICON_RESET = '\uD83D\uDD04';
-    var ICON_DELETE = '\uD83D\uDDD1\uFE0F';
     var ICON_SVG_RESET = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>';
     var ICON_SVG_PLUS = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>';
-    var ICON_SVG_DELETE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>';
+    var ICON_SVG_DELETE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
     var ICON_SVG_SMALL_PLUS = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>';
-    var ICON_SVG_SMALL_DELETE = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" /></svg>';
+    var ICON_SVG_SMALL_DELETE = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>';
 
     // === СТИЛИ ===
     var STYLES = [
@@ -234,7 +232,7 @@
         '  align-items: center !important;',
         '  justify-content: center !important;',
         '}',
-        '#work-checklist-panel .modal, #work-checklist-modal {',
+        '#work-checklist-panel .modal {',
         '  background: white !important;',
         '  border-radius: 12px !important;',
         '  padding: 24px !important;',
@@ -316,22 +314,21 @@
             var saved = null;
             if (typeof GM_getValue !== 'undefined') {
                 saved = GM_getValue('work_checklists', null);
-                console.log('[WC] GM_getValue результат:', saved ? 'есть данные' : 'нет');
+                console.log('[WC] GM_getValue:', saved ? 'есть' : 'нет');
             }
             if (!saved) {
                 saved = localStorage.getItem('wc_data');
-                console.log('[WC] localStorage результат:', saved ? 'есть данные' : 'нет');
+                console.log('[WC] localStorage:', saved ? 'есть' : 'нет');
             }
             if (saved) {
                 appData = JSON.parse(saved);
-                // Защита: гарантируем что sections это массив
                 if (!appData.sections || !Array.isArray(appData.sections)) {
                     appData = { sections: [] };
                 }
                 console.log('[WC] Загружено разделов:', appData.sections.length);
             } else {
                 appData = { sections: [] };
-                console.log('[WC] Нет сохранённых данных');
+                console.log('[WC] Нет данных');
             }
         } catch (e) {
             console.error('[WC] Ошибка загрузки:', e);
@@ -347,7 +344,7 @@
                 GM_setValue('work_checklists', json);
             }
             localStorage.setItem('wc_data', json);
-            console.log('[WC] Данные сохранены');
+            console.log('[WC] Сохранено');
         } catch (e) {
             console.error('[WC] Ошибка сохранения:', e);
         }
@@ -357,18 +354,18 @@
     function ensureToggleButton() {
         var existing = document.getElementById('work-checklist-toggle');
         if (existing) {
-            console.log('[WC] Кнопка уже существует');
+            console.log('[WC] Кнопка существует');
             return;
         }
 
-        console.log('[WC] Создаю кнопку-триггер...');
+        console.log('[WC] Создаю кнопку...');
         var toggle = document.createElement('button');
         toggle.id = 'work-checklist-toggle';
         toggle.textContent = ICON_CHECKLIST;
         toggle.title = 'Рабочий Чек-лист';
         toggle.setAttribute('aria-label', 'Открыть чек-лист');
         toggle.onclick = function() {
-            console.log('[WC] Клик по кнопке');
+            console.log('[WC] Клик');
             var panel = document.getElementById('work-checklist-panel');
             if (panel) {
                 panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
@@ -379,9 +376,9 @@
 
         if (document.body) {
             document.body.appendChild(toggle);
-            console.log('[WC] Кнопка добавлена в body');
+            console.log('[WC] Кнопка добавлена');
         } else {
-            console.warn('[WC] body ещё не готов, жду...');
+            console.warn('[WC] body не готов');
             setTimeout(ensureToggleButton, 500);
         }
     }
@@ -398,7 +395,7 @@
         temp.innerHTML = HTML;
         var panel = temp.firstChild;
         document.body.appendChild(panel);
-        console.log('[WC] Панель добавлена в DOM');
+        console.log('[WC] Панель создана');
 
         document.getElementById('wc-close').onclick = function() {
             panel.style.display = 'none';
@@ -478,13 +475,11 @@
         for (s = 0; s < appData.sections.length; s++) {
             var section = appData.sections[s];
             
-            // Защита: проверяем что section валидный
             if (!section || !section.id) {
-                console.warn('[WC] Пропускаю невалидный раздел:', section);
+                console.warn('[WC] Пропускаю невалидный раздел');
                 continue;
             }
 
-            // Гарантируем что items это массив
             if (!section.items || !Array.isArray(section.items)) {
                 section.items = [];
             }
@@ -497,19 +492,19 @@
 
             var i;
             for (i = 0; i < section.items.length; i++) {
-                var item = section.items[i];
-                if (!item) continue; // Защита от undefined
+                var item1 = section.items[i];
+                if (!item1) continue;
                 
                 totalItems++;
-                if (item.completed) completedItems++;
+                if (item1.completed) completedItems++;
                 
-                if (item.subtasks && Array.isArray(item.subtasks)) {
+                if (item1.subtasks && Array.isArray(item1.subtasks)) {
                     var j;
-                    for (j = 0; j < item.subtasks.length; j++) {
-                        var sub = item.subtasks[j];
-                        if (!sub) continue;
+                    for (j = 0; j < item1.subtasks.length; j++) {
+                        var sub1 = item1.subtasks[j];
+                        if (!sub1) continue;
                         totalItems++;
-                        if (sub.completed) completedItems++;
+                        if (sub1.completed) completedItems++;
                     }
                 }
             }
@@ -555,11 +550,10 @@
             if (section.items.length > 0) {
                 var k;
                 for (k = 0; k < section.items.length; k++) {
-                    var item = section.items[k];
+                    var item2 = section.items[k];
                     
-                    // Защита: пропускаем undefined
-                    if (!item || !item.id) {
-                        console.warn('[WC] Пропускаю невалидный item:', item);
+                    if (!item2 || !item2.id) {
+                        console.warn('[WC] Пропускаю невалидный item');
                         continue;
                     }
 
@@ -568,25 +562,25 @@
 
                     var itemHtml = [
                         '<div class="checklist-item">',
-                        '  <input type="checkbox" class="item-check" data-sid="' + section.id + '" data-iid="' + item.id + '" ' + (item.completed ? 'checked' : '') + '>',
-                        '  <strong class="item-text ' + (item.completed ? 'completed' : '') + '">' + escapeHtml(item.text || '') + '</strong>',
-                        '  <button class="icon-btn primary" data-action="add-subtask" data-sid="' + section.id + '" data-iid="' + item.id + '" title="Добавить пункт">' + ICON_SVG_SMALL_PLUS + '</button>',
-                        '  <button class="icon-btn danger" data-action="delete-item" data-sid="' + section.id + '" data-iid="' + item.id + '" title="Удалить">' + ICON_SVG_SMALL_DELETE + '</button>',
+                        '  <input type="checkbox" class="item-check" data-sid="' + section.id + '" data-iid="' + item2.id + '" ' + (item2.completed ? 'checked' : '') + '>',
+                        '  <strong class="item-text ' + (item2.completed ? 'completed' : '') + '">' + escapeHtml(item2.text || '') + '</strong>',
+                        '  <button class="icon-btn primary" data-action="add-subtask" data-sid="' + section.id + '" data-iid="' + item2.id + '" title="Добавить пункт">' + ICON_SVG_SMALL_PLUS + '</button>',
+                        '  <button class="icon-btn danger" data-action="delete-item" data-sid="' + section.id + '" data-iid="' + item2.id + '" title="Удалить">' + ICON_SVG_SMALL_DELETE + '</button>',
                         '</div>'
                     ].join('');
 
-                    if (item.subtasks && Array.isArray(item.subtasks) && item.subtasks.length > 0) {
+                    if (item2.subtasks && Array.isArray(item2.subtasks) && item2.subtasks.length > 0) {
                         itemHtml += '<ul style="list-style: none; padding-left: 26px; margin-top: 4px;">';
                         var m;
-                        for (m = 0; m < item.subtasks.length; m++) {
-                            var sub = item.subtasks[m];
-                            if (!sub || !sub.id) continue;
+                        for (m = 0; m < item2.subtasks.length; m++) {
+                            var sub2 = item2.subtasks[m];
+                            if (!sub2 || !sub2.id) continue;
                             
                             itemHtml += [
                                 '<li class="checklist-item">',
-                                '  <input type="checkbox" class="sub-check" data-sid="' + section.id + '" data-iid="' + item.id + '" data-subid="' + sub.id + '" ' + (sub.completed ? 'checked' : '') + '>',
-                                '  <span class="item-text ' + (sub.completed ? 'completed' : '') + '" style="font-size: 13px;">' + escapeHtml(sub.text || '') + '</span>',
-                                '  <button class="icon-btn danger" data-action="delete-sub" data-sid="' + section.id + '" data-iid="' + item.id + '" data-subid="' + sub.id + '">' + ICON_SVG_SMALL_DELETE + '</button>',
+                                '  <input type="checkbox" class="sub-check" data-sid="' + section.id + '" data-iid="' + item2.id + '" data-subid="' + sub2.id + '" ' + (sub2.completed ? 'checked' : '') + '>',
+                                '  <span class="item-text ' + (sub2.completed ? 'completed' : '') + '" style="font-size: 13px;">' + escapeHtml(sub2.text || '') + '</span>',
+                                '  <button class="icon-btn danger" data-action="delete-sub" data-sid="' + section.id + '" data-iid="' + item2.id + '" data-subid="' + sub2.id + '">' + ICON_SVG_SMALL_DELETE + '</button>',
                                 '</li>'
                             ].join('');
                         }
@@ -618,7 +612,7 @@
                     var iid = this.getAttribute('data-iid');
                     var subid = this.getAttribute('data-subid');
 
-                    console.log('[WC] Действие:', action, 'params:', { id: id, sid: sid, iid: iid, subid: subid });
+                    console.log('[WC] Действие:', action);
 
                     if (action === 'add-item') {
                         openModal('addGroup', { sid: id });
@@ -733,7 +727,7 @@
         var action = currentModalAction.action;
         var params = currentModalAction.params;
 
-        console.log('[WC] confirmModal:', action, params);
+        console.log('[WC] confirmModal:', action);
 
         if (action === 'addSection') {
             appData.sections.push({
@@ -744,13 +738,13 @@
             });
         } else if (action === 'addGroup') {
             if (!params || !params.sid) {
-                console.error('[WC] addGroup: нет params.sid');
+                console.error('[WC] addGroup: нет sid');
                 closeModal();
                 return;
             }
             var section = findSection(params.sid);
             if (!section) {
-                console.error('[WC] addGroup: раздел не найден, sid =', params.sid);
+                console.error('[WC] addGroup: раздел не найден');
                 closeModal();
                 return;
             }
@@ -763,19 +757,19 @@
             });
         } else if (action === 'addSubtask') {
             if (!params || !params.sid || !params.iid) {
-                console.error('[WC] addSubtask: нет params', params);
+                console.error('[WC] addSubtask: нет params');
                 closeModal();
                 return;
             }
             var section2 = findSection(params.sid);
             if (!section2) {
-                console.error('[WC] addSubtask: раздел не найден, sid =', params.sid);
+                console.error('[WC] addSubtask: раздел не найден');
                 closeModal();
                 return;
             }
             var item = findItem(section2, params.iid);
             if (!item) {
-                console.error('[WC] addSubtask: группа не найдена, iid =', params.iid);
+                console.error('[WC] addSubtask: группа не найдена');
                 closeModal();
                 return;
             }
@@ -843,7 +837,7 @@
 
     function resetSection(sid) {
         var section = findSection(sid);
-        if (section && confirm('Сбросить все отметки в этом разделе?')) {
+        if (section && confirm('Сбросить все отметки?')) {
             var i;
             for (i = 0; i < section.items.length; i++) {
                 section.items[i].completed = false;
@@ -871,7 +865,6 @@
             URL.revokeObjectURL(url);
         } catch (e) {
             console.error('[WC] Ошибка экспорта:', e);
-            alert('Ошибка при экспорте данных');
         }
     }
 
@@ -892,11 +885,10 @@
                     saveData();
                     render();
                 } else {
-                    alert('Неверный формат файла');
+                    alert('Неверный формат');
                 }
             } catch (err) {
-                console.error('[WC] Ошибка чтения файла:', err);
-                alert('Ошибка чтения файла');
+                console.error('[WC] Ошибка импорта:', err);
             }
             e.target.value = '';
         };
@@ -910,7 +902,7 @@
 
         var observer = new MutationObserver(function() {
             if (!document.getElementById('work-checklist-toggle')) {
-                console.log('[WC] Кнопка удалена сайтом, воссоздаю...');
+                console.log('[WC] Кнопка удалена, воссоздаю');
                 ensureToggleButton();
             }
         });
