@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Рабочий Чек-лист
 // @namespace    https://smartway.today/
-// @version      1.1
+// @version      1.2
 // @description  Чек-листы для рабочих задач с прогрессом и импортом/экспортом
 // @author       Smartway
 // @match        *://*/*
@@ -18,6 +18,7 @@
     console.log('[WC] === Скрипт Рабочий Чек-лист загружен ===');
     console.log('[WC] URL:', window.location.href);
 
+    // === ИКОНКИ (Unicode-escape, GitHub не ломает) ===
     var ICON_CHECKLIST = '\uD83D\uDCCB';
     var ICON_CLOSE = '\u2715';
     var ICON_PLUS = '\u2795';
@@ -25,7 +26,13 @@
     var ICON_EXPORT = '\uD83D\uDCE4';
     var ICON_RESET = '\uD83D\uDD04';
     var ICON_DELETE = '\uD83D\uDDD1\uFE0F';
+    var ICON_SVG_RESET = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>';
+    var ICON_SVG_PLUS = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>';
+    var ICON_SVG_DELETE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>';
+    var ICON_SVG_SMALL_PLUS = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>';
+    var ICON_SVG_SMALL_DELETE = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" /></svg>';
 
+    // === СТИЛИ ===
     var STYLES = [
         '#work-checklist-toggle {',
         '  position: fixed !important;',
@@ -109,17 +116,13 @@
         '  align-items: center !important;',
         '  gap: 4px !important;',
         '}',
-        '#work-checklist-panel .wc-btn:hover {',
-        '  background: #f3f4f6 !important;',
-        '}',
+        '#work-checklist-panel .wc-btn:hover { background: #f3f4f6 !important; }',
         '#work-checklist-panel .wc-btn-primary {',
         '  background: #4f46e5 !important;',
         '  color: white !important;',
         '  border-color: #4f46e5 !important;',
         '}',
-        '#work-checklist-panel .wc-btn-primary:hover {',
-        '  background: #4338ca !important;',
-        '}',
+        '#work-checklist-panel .wc-btn-primary:hover { background: #4338ca !important; }',
         '#work-checklist-panel .wc-content {',
         '  flex: 1 !important;',
         '  overflow-y: auto !important;',
@@ -141,11 +144,12 @@
         '  align-items: center !important;',
         '  border-bottom: 1px solid #e5e7eb !important;',
         '}',
+        '#work-checklist-panel .section-info { flex: 1; }',
         '#work-checklist-panel .section-title {',
         '  font-size: 15px !important;',
         '  font-weight: 600 !important;',
         '  color: #1f2937 !important;',
-        '  margin: 0 !important;',
+        '  margin: 0 0 6px 0 !important;',
         '}',
         '#work-checklist-panel .section-actions {',
         '  display: flex !important;',
@@ -159,17 +163,15 @@
         '  border-radius: 4px !important;',
         '  display: flex !important;',
         '  align-items: center !important;',
+        '  color: #6b7280 !important;',
         '}',
-        '#work-checklist-panel .icon-btn:hover {',
-        '  background: #e5e7eb !important;',
-        '}',
+        '#work-checklist-panel .icon-btn:hover { background: #e5e7eb !important; }',
         '#work-checklist-panel .icon-btn.primary { color: #4f46e5 !important; }',
         '#work-checklist-panel .icon-btn.danger { color: #ef4444 !important; }',
         '#work-checklist-panel .progress-container {',
         '  display: flex !important;',
         '  align-items: center !important;',
         '  gap: 8px !important;',
-        '  margin-top: 6px !important;',
         '}',
         '#work-checklist-panel .progress-bar {',
         '  flex: 1 !important;',
@@ -196,9 +198,9 @@
         '  margin: 0 !important;',
         '}',
         '#work-checklist-panel .checklist-group {',
-        '  margin-bottom: 12px !important;',
-        '  padding-left: 12px !important;',
+        '  margin-bottom: 8px !important;',
         '  border-left: 2px solid #e5e7eb !important;',
+        '  padding-left: 10px !important;',
         '}',
         '#work-checklist-panel .checklist-item {',
         '  display: flex !important;',
@@ -232,7 +234,7 @@
         '  align-items: center !important;',
         '  justify-content: center !important;',
         '}',
-        '#work-checklist-panel .modal {',
+        '#work-checklist-panel .modal, #work-checklist-modal {',
         '  background: white !important;',
         '  border-radius: 12px !important;',
         '  padding: 24px !important;',
@@ -303,24 +305,29 @@
         '</div>'
     ].join('\n');
 
+    // === ДАННЫЕ ===
     var appData = { sections: [] };
     var currentModalAction = null;
 
     // === СОХРАНЕНИЕ/ЗАГРУЗКА С FALLBACK ===
     function loadData() {
+        console.log('[WC] Загрузка данных...');
         try {
             var saved = null;
             if (typeof GM_getValue !== 'undefined') {
                 saved = GM_getValue('work_checklists', null);
+                console.log('[WC] GM_getValue результат:', saved ? 'есть данные' : 'нет');
             }
             if (!saved) {
                 saved = localStorage.getItem('wc_data');
+                console.log('[WC] localStorage результат:', saved ? 'есть данные' : 'нет');
             }
             if (saved) {
                 appData = JSON.parse(saved);
-                console.log('[WC] Данные загружены:', appData.sections.length, 'разделов');
+                console.log('[WC] Загружено разделов:', appData.sections ? appData.sections.length : 0);
             } else {
-                console.log('[WC] Нет сохранённых данных');
+                appData = { sections: [] };
+                console.log('[WC] Нет сохранённых данных, создаём пустые');
             }
         } catch (e) {
             console.error('[WC] Ошибка загрузки:', e);
@@ -336,12 +343,13 @@
                 GM_setValue('work_checklists', json);
             }
             localStorage.setItem('wc_data', json);
+            console.log('[WC] Данные сохранены');
         } catch (e) {
             console.error('[WC] Ошибка сохранения:', e);
         }
     }
 
-    // === СОЗДАНИЕ КНОПКИ (с проверкой) ===
+    // === СОЗДАНИЕ КНОПКИ ===
     function ensureToggleButton() {
         var existing = document.getElementById('work-checklist-toggle');
         if (existing) {
@@ -365,14 +373,12 @@
             }
         };
 
-        // Пробуем добавить в body
         if (document.body) {
             document.body.appendChild(toggle);
             console.log('[WC] Кнопка добавлена в body');
         } else {
             console.warn('[WC] body ещё не готов, жду...');
             setTimeout(ensureToggleButton, 500);
-            return;
         }
     }
 
@@ -380,19 +386,16 @@
     function createPanel() {
         console.log('[WC] Создаю панель...');
 
-        // Стили
         var styleEl = document.createElement('style');
         styleEl.textContent = STYLES;
         document.head.appendChild(styleEl);
 
-        // HTML
         var temp = document.createElement('div');
         temp.innerHTML = HTML;
         var panel = temp.firstChild;
         document.body.appendChild(panel);
         console.log('[WC] Панель добавлена в DOM');
 
-        // Обработчики
         document.getElementById('wc-close').onclick = function() {
             panel.style.display = 'none';
         };
@@ -416,12 +419,16 @@
         loadData();
     }
 
+    // === ESCAPE HTML ===
     function escapeHtml(text) {
+        if (!text) return '';
         var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
         return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
     }
 
+    // === РЕНДЕР ===
     function render() {
+        console.log('[WC] Рендер...');
         var list = document.getElementById('wc-sections-list');
         if (!list) {
             console.warn('[WC] wc-sections-list не найден');
@@ -435,7 +442,9 @@
             return;
         }
 
-        appData.sections.forEach(function(section) {
+        var s;
+        for (s = 0; s < appData.sections.length; s++) {
+            var section = appData.sections[s];
             var sectionEl = document.createElement('div');
             sectionEl.className = 'section-card';
 
@@ -443,23 +452,26 @@
             var completedItems = 0;
 
             if (section.items && section.items.length > 0) {
-                section.items.forEach(function(item) {
+                var i;
+                for (i = 0; i < section.items.length; i++) {
+                    var item = section.items[i];
                     totalItems++;
                     if (item.completed) completedItems++;
                     if (item.subtasks && item.subtasks.length > 0) {
-                        item.subtasks.forEach(function(sub) {
+                        var j;
+                        for (j = 0; j < item.subtasks.length; j++) {
                             totalItems++;
-                            if (sub.completed) completedItems++;
-                        });
+                            if (item.subtasks[j].completed) completedItems++;
+                        }
                     }
-                });
+                }
             }
 
             var percent = totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
 
-            sectionEl.innerHTML = [
+            var headerHtml = [
                 '<div class="section-header" data-section-id="' + section.id + '">',
-                '  <div style="flex: 1;">',
+                '  <div class="section-info">',
                 '    <h4 class="section-title">' + escapeHtml(section.title) + '</h4>',
                 '    <div class="progress-container">',
                 '      <div class="progress-bar"><div class="progress-fill" style="width: ' + percent + '%"></div></div>',
@@ -467,9 +479,9 @@
                 '    </div>',
                 '  </div>',
                 '  <div class="section-actions">',
-                '    <button class="icon-btn primary" data-action="add-item" data-id="' + section.id + '" title="Добавить группу">' + ICON_PLUS + '</button>',
-                '    <button class="icon-btn" data-action="reset" data-id="' + section.id + '" title="Сбросить">' + ICON_RESET + '</button>',
-                '    <button class="icon-btn danger" data-action="delete" data-id="' + section.id + '" title="Удалить">' + ICON_DELETE + '</button>',
+                '    <button class="icon-btn" data-action="reset" data-id="' + section.id + '" title="Сбросить">' + ICON_SVG_RESET + '</button>',
+                '    <button class="icon-btn primary" data-action="add-item" data-id="' + section.id + '" title="Добавить группу">' + ICON_SVG_PLUS + '</button>',
+                '    <button class="icon-btn danger" data-action="delete" data-id="' + section.id + '" title="Удалить">' + ICON_SVG_DELETE + '</button>',
                 '  </div>',
                 '</div>',
                 '<div class="section-body" id="body-' + section.id + '" style="' + (section.isOpen ? 'display: block;' : 'display: none;') + '">',
@@ -477,18 +489,26 @@
                 '</div>'
             ].join('');
 
+            sectionEl.innerHTML = headerHtml;
+
             var header = sectionEl.querySelector('.section-header');
             header.onclick = function(e) {
                 if (e.target.closest('button')) return;
-                section.isOpen = !section.isOpen;
-                saveData();
-                render();
+                var sid = this.getAttribute('data-section-id');
+                var sec = findSection(sid);
+                if (sec) {
+                    sec.isOpen = !sec.isOpen;
+                    saveData();
+                    render();
+                }
             };
 
             var itemsList = sectionEl.querySelector('#items-' + section.id);
 
             if (section.items && section.items.length > 0) {
-                section.items.forEach(function(item) {
+                var k;
+                for (k = 0; k < section.items.length; k++) {
+                    var item = section.items[k];
                     var itemEl = document.createElement('li');
                     itemEl.className = 'checklist-group';
 
@@ -496,70 +516,127 @@
                         '<div class="checklist-item">',
                         '  <input type="checkbox" class="item-check" data-sid="' + section.id + '" data-iid="' + item.id + '" ' + (item.completed ? 'checked' : '') + '>',
                         '  <strong class="item-text ' + (item.completed ? 'completed' : '') + '">' + escapeHtml(item.text) + '</strong>',
-                        '  <button class="icon-btn primary" data-action="add-subtask" data-sid="' + section.id + '" data-iid="' + item.id + '" title="Добавить пункт">+</button>',
-                        '  <button class="icon-btn danger" data-action="delete-item" data-sid="' + section.id + '" data-iid="' + item.id + '" title="Удалить">' + ICON_DELETE + '</button>',
+                        '  <button class="icon-btn primary" data-action="add-subtask" data-sid="' + section.id + '" data-iid="' + item.id + '" title="Добавить пункт">' + ICON_SVG_SMALL_PLUS + '</button>',
+                        '  <button class="icon-btn danger" data-action="delete-item" data-sid="' + section.id + '" data-iid="' + item.id + '" title="Удалить">' + ICON_SVG_SMALL_DELETE + '</button>',
                         '</div>'
                     ].join('');
 
                     if (item.subtasks && item.subtasks.length > 0) {
                         itemHtml += '<ul style="list-style: none; padding-left: 26px; margin-top: 4px;">';
-                        item.subtasks.forEach(function(sub) {
+                        var m;
+                        for (m = 0; m < item.subtasks.length; m++) {
+                            var sub = item.subtasks[m];
                             itemHtml += [
                                 '<li class="checklist-item">',
                                 '  <input type="checkbox" class="sub-check" data-sid="' + section.id + '" data-iid="' + item.id + '" data-subid="' + sub.id + '" ' + (sub.completed ? 'checked' : '') + '>',
                                 '  <span class="item-text ' + (sub.completed ? 'completed' : '') + '" style="font-size: 13px;">' + escapeHtml(sub.text) + '</span>',
-                                '  <button class="icon-btn danger" data-action="delete-sub" data-sid="' + section.id + '" data-iid="' + item.id + '" data-subid="' + sub.id + '">' + ICON_DELETE + '</button>',
+                                '  <button class="icon-btn danger" data-action="delete-sub" data-sid="' + section.id + '" data-iid="' + item.id + '" data-subid="' + sub.id + '">' + ICON_SVG_SMALL_DELETE + '</button>',
                                 '</li>'
                             ].join('');
-                        });
+                        }
                         itemHtml += '</ul>';
                     }
 
                     itemEl.innerHTML = itemHtml;
                     itemsList.appendChild(itemEl);
-                });
+                }
             }
 
             list.appendChild(sectionEl);
-        });
+        }
 
         attachEventListeners();
     }
 
-    function attachEventListeners() {
-        document.querySelectorAll('#work-checklist-panel [data-action]').forEach(function(btn) {
-            btn.onclick = function(e) {
-                e.stopPropagation();
-                var action = this.getAttribute('data-action');
-                var id = this.getAttribute('data-id');
-                var sid = this.getAttribute('data-sid');
-                var iid = this.getAttribute('data-iid');
-                var subid = this.getAttribute('data-subid');
-
-                if (action === 'add-item') openModal('addGroup', { sid: id });
-                else if (action === 'add-subtask') openModal('addSubtask', { sid: sid, iid: iid });
-                else if (action === 'reset') resetSection(id);
-                else if (action === 'delete') {
-                    if (confirm('Удалить этот раздел?')) {
-                        appData.sections = appData.sections.filter(function(s) { return s.id !== id; });
-                        saveData();
-                        render();
-                    }
-                }
-                else if (action === 'delete-item') deleteItem(sid, iid);
-                else if (action === 'delete-sub') deleteSubtask(sid, iid, subid);
-            };
-        });
-
-        document.querySelectorAll('#work-checklist-panel .item-check').forEach(function(cb) {
-            cb.onchange = function() { toggleItem(this.getAttribute('data-sid'), this.getAttribute('data-iid')); };
-        });
-
-        document.querySelectorAll('#work-checklist-panel .sub-check').forEach(function(cb) {
-            cb.onchange = function() { toggleSubtask(this.getAttribute('data-sid'), this.getAttribute('data-iid'), this.getAttribute('data-subid')); };
-        });
+    // === ПОИСК РАЗДЕЛА (с защитой) ===
+    function findSection(sid) {
+        if (!appData.sections || !sid) return null;
+        var i;
+        for (i = 0; i < appData.sections.length; i++) {
+            if (appData.sections[i].id === sid) return appData.sections[i];
+        }
+        return null;
     }
 
+    // === ПОИСК ГРУППЫ (с защитой) ===
+    function findItem(section, iid) {
+        if (!section || !section.items || !iid) return null;
+        var i;
+        for (i = 0; i < section.items.length; i++) {
+            if (section.items[i].id === iid) return section.items[i];
+        }
+        return null;
+    }
+
+    // === ПОИСК ПОДГРУППЫ (с защитой) ===
+    function findSubtask(item, subid) {
+        if (!item || !item.subtasks || !subid) return null;
+        var i;
+        for (i = 0; i < item.subtasks.length; i++) {
+            if (item.subtasks[i].id === subid) return item.subtasks[i];
+        }
+        return null;
+    }
+
+    // === ОБРАБОТЧИКИ СОБЫТИЙ ===
+    function attachEventListeners() {
+        var buttons = document.querySelectorAll('#work-checklist-panel [data-action]');
+        var b;
+        for (b = 0; b < buttons.length; b++) {
+            (function(btn) {
+                btn.onclick = function(e) {
+                    e.stopPropagation();
+                    var action = this.getAttribute('data-action');
+                    var id = this.getAttribute('data-id');
+                    var sid = this.getAttribute('data-sid');
+                    var iid = this.getAttribute('data-iid');
+                    var subid = this.getAttribute('data-subid');
+
+                    console.log('[WC] Действие:', action, 'params:', { id: id, sid: sid, iid: iid, subid: subid });
+
+                    if (action === 'add-item') {
+                        openModal('addGroup', { sid: id });
+                    } else if (action === 'add-subtask') {
+                        openModal('addSubtask', { sid: sid, iid: iid });
+                    } else if (action === 'reset') {
+                        resetSection(id);
+                    } else if (action === 'delete') {
+                        if (confirm('Удалить этот раздел?')) {
+                            appData.sections = appData.sections.filter(function(s) { return s.id !== id; });
+                            saveData();
+                            render();
+                        }
+                    } else if (action === 'delete-item') {
+                        deleteItem(sid, iid);
+                    } else if (action === 'delete-sub') {
+                        deleteSubtask(sid, iid, subid);
+                    }
+                };
+            })(buttons[b]);
+        }
+
+        var itemChecks = document.querySelectorAll('#work-checklist-panel .item-check');
+        var c;
+        for (c = 0; c < itemChecks.length; c++) {
+            (function(cb) {
+                cb.onchange = function() {
+                    toggleItem(this.getAttribute('data-sid'), this.getAttribute('data-iid'));
+                };
+            })(itemChecks[c]);
+        }
+
+        var subChecks = document.querySelectorAll('#work-checklist-panel .sub-check');
+        var d;
+        for (d = 0; d < subChecks.length; d++) {
+            (function(cb) {
+                cb.onchange = function() {
+                    toggleSubtask(this.getAttribute('data-sid'), this.getAttribute('data-iid'), this.getAttribute('data-subid'));
+                };
+            })(subChecks[d]);
+        }
+    }
+
+    // === МОДАЛЬНОЕ ОКНО ===
     function openModal(action, params) {
         params = params || {};
         currentModalAction = { action: action, params: params };
@@ -568,10 +645,19 @@
         overlay.className = 'modal-overlay';
         overlay.id = 'wc-modal-overlay';
 
-        var title = '', placeholder = '';
-        if (action === 'addSection') { title = 'Новый раздел'; placeholder = 'Название раздела...'; }
-        else if (action === 'addGroup') { title = 'Новая группа'; placeholder = 'Название группы...'; }
-        else if (action === 'addSubtask') { title = 'Новый пункт'; placeholder = 'Описание действия...'; }
+        var title = '';
+        var placeholder = '';
+
+        if (action === 'addSection') {
+            title = 'Новый раздел';
+            placeholder = 'Название раздела...';
+        } else if (action === 'addGroup') {
+            title = 'Новая группа';
+            placeholder = 'Название группы...';
+        } else if (action === 'addSubtask') {
+            title = 'Новый пункт';
+            placeholder = 'Описание действия...';
+        }
 
         overlay.innerHTML = [
             '<div class="modal">',
@@ -613,25 +699,66 @@
         if (!input) return;
 
         var val = input.value.trim();
-        if (!val || !currentModalAction) { closeModal(); return; }
+        if (!val || !currentModalAction) {
+            closeModal();
+            return;
+        }
 
         var action = currentModalAction.action;
         var params = currentModalAction.params;
 
+        console.log('[WC] confirmModal:', action, params);
+
         if (action === 'addSection') {
-            appData.sections.push({ id: Date.now().toString(), title: val, items: [], isOpen: true });
+            appData.sections.push({
+                id: Date.now().toString(),
+                title: val,
+                items: [],
+                isOpen: true
+            });
         } else if (action === 'addGroup') {
-            var section = appData.sections.find(function(s) { return s.id === params.sid; });
-            if (section) section.items.push({ id: Date.now().toString(), text: val, completed: false, subtasks: [] });
-        } else if (action === 'addSubtask') {
-            var section = appData.sections.find(function(s) { return s.id === params.sid; });
-            if (section) {
-                var item = section.items.find(function(i) { return i.id === params.iid; });
-                if (item) {
-                    if (!item.subtasks) item.subtasks = [];
-                    item.subtasks.push({ id: Date.now().toString(), text: val, completed: false });
-                }
+            if (!params || !params.sid) {
+                console.error('[WC] addGroup: нет params.sid');
+                closeModal();
+                return;
             }
+            var section = findSection(params.sid);
+            if (!section) {
+                console.error('[WC] addGroup: раздел не найден, sid =', params.sid);
+                closeModal();
+                return;
+            }
+            if (!section.items) section.items = [];
+            section.items.push({
+                id: Date.now().toString(),
+                text: val,
+                completed: false,
+                subtasks: []
+            });
+        } else if (action === 'addSubtask') {
+            if (!params || !params.sid || !params.iid) {
+                console.error('[WC] addSubtask: нет params', params);
+                closeModal();
+                return;
+            }
+            var section2 = findSection(params.sid);
+            if (!section2) {
+                console.error('[WC] addSubtask: раздел не найден, sid =', params.sid);
+                closeModal();
+                return;
+            }
+            var item = findItem(section2, params.iid);
+            if (!item) {
+                console.error('[WC] addSubtask: группа не найдена, iid =', params.iid);
+                closeModal();
+                return;
+            }
+            if (!item.subtasks) item.subtasks = [];
+            item.subtasks.push({
+                id: Date.now().toString(),
+                text: val,
+                completed: false
+            });
         }
 
         saveData();
@@ -639,50 +766,74 @@
         closeModal();
     }
 
+    // === ДЕЙСТВИЯ С ПУНКТАМИ ===
     function toggleItem(sid, iid) {
-        var section = appData.sections.find(function(s) { return s.id === sid; });
+        var section = findSection(sid);
         if (section) {
-            var item = section.items.find(function(i) { return i.id === iid; });
-            if (item) { item.completed = !item.completed; saveData(); render(); }
+            var item = findItem(section, iid);
+            if (item) {
+                item.completed = !item.completed;
+                saveData();
+                render();
+            }
         }
     }
 
     function toggleSubtask(sid, iid, subid) {
-        var section = appData.sections.find(function(s) { return s.id === sid; });
+        var section = findSection(sid);
         if (section) {
-            var item = section.items.find(function(i) { return i.id === iid; });
-            if (item && item.subtasks) {
-                var sub = item.subtasks.find(function(s) { return s.id === subid; });
-                if (sub) { sub.completed = !sub.completed; saveData(); render(); }
+            var item = findItem(section, iid);
+            if (item) {
+                var sub = findSubtask(item, subid);
+                if (sub) {
+                    sub.completed = !sub.completed;
+                    saveData();
+                    render();
+                }
             }
         }
     }
 
     function deleteItem(sid, iid) {
-        var section = appData.sections.find(function(s) { return s.id === sid; });
-        if (section) { section.items = section.items.filter(function(i) { return i.id !== iid; }); saveData(); render(); }
-    }
-
-    function deleteSubtask(sid, iid, subid) {
-        var section = appData.sections.find(function(s) { return s.id === sid; });
+        var section = findSection(sid);
         if (section) {
-            var item = section.items.find(function(i) { return i.id === iid; });
-            if (item && item.subtasks) { item.subtasks = item.subtasks.filter(function(s) { return s.id !== subid; }); saveData(); render(); }
-        }
-    }
-
-    function resetSection(sid) {
-        var section = appData.sections.find(function(s) { return s.id === sid; });
-        if (section && confirm('Сбросить все отметки в этом разделе?')) {
-            section.items.forEach(function(item) {
-                item.completed = false;
-                if (item.subtasks) item.subtasks.forEach(function(sub) { sub.completed = false; });
-            });
+            section.items = section.items.filter(function(i) { return i.id !== iid; });
             saveData();
             render();
         }
     }
 
+    function deleteSubtask(sid, iid, subid) {
+        var section = findSection(sid);
+        if (section) {
+            var item = findItem(section, iid);
+            if (item && item.subtasks) {
+                item.subtasks = item.subtasks.filter(function(s) { return s.id !== subid; });
+                saveData();
+                render();
+            }
+        }
+    }
+
+    function resetSection(sid) {
+        var section = findSection(sid);
+        if (section && confirm('Сбросить все отметки в этом разделе?')) {
+            var i;
+            for (i = 0; i < section.items.length; i++) {
+                section.items[i].completed = false;
+                if (section.items[i].subtasks) {
+                    var j;
+                    for (j = 0; j < section.items[i].subtasks.length; j++) {
+                        section.items[i].subtasks[j].completed = false;
+                    }
+                }
+            }
+            saveData();
+            render();
+        }
+    }
+
+    // === ЭКСПОРТ/ИМПОРТ ===
     function exportData() {
         try {
             var blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
@@ -731,7 +882,7 @@
         console.log('[WC] Инициализация...');
         ensureToggleButton();
 
-        // MutationObserver на случай если сайт удалит кнопку
+        // MutationObserver для восстановления кнопки если сайт её удалит
         var observer = new MutationObserver(function() {
             if (!document.getElementById('work-checklist-toggle')) {
                 console.log('[WC] Кнопка удалена сайтом, воссоздаю...');
